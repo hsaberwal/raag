@@ -3,7 +3,18 @@ const router = express.Router();
 
 // Get database instance from environment or use default
 const useTestMode = process.env.USE_LOCAL_STORAGE === 'true' || !process.env.DB_HOST;
-const db = useTestMode ? require('../config/test-database') : require('../config/database');
+console.log('🔍 Auth route - useTestMode:', useTestMode, 'USE_LOCAL_STORAGE:', process.env.USE_LOCAL_STORAGE);
+
+let db;
+if (useTestMode) {
+    console.log('📋 Auth route loading test database...');
+    db = require('../config/test-database');
+    console.log('✅ Auth route test database loaded');
+} else {
+    console.log('🔗 Auth route loading PostgreSQL database...');
+    db = require('../config/database');
+    console.log('✅ Auth route PostgreSQL database loaded');
+}
 
 // Simple login (for demo purposes - in production, use proper authentication)
 router.post('/login', async (req, res) => {
