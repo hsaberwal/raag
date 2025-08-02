@@ -114,8 +114,28 @@ const testData = {
 };
 
 // Write test data to JSON files for simple file-based database
-fs.writeFileSync('test_data.json', JSON.stringify(testData, null, 2));
-console.log('✅ Created test database with sample data\n');
+try {
+    // Check if test_data.json exists as a directory and remove it
+    if (fs.existsSync('test_data.json')) {
+        const stats = fs.statSync('test_data.json');
+        if (stats.isDirectory()) {
+            console.log('⚠️  Found test_data.json as directory, removing...');
+            fs.rmSync('test_data.json', { recursive: true, force: true });
+        }
+    }
+    
+    fs.writeFileSync('test_data.json', JSON.stringify(testData, null, 2));
+    console.log('✅ Created test database with sample data\n');
+} catch (error) {
+    console.log('⚠️  Error creating test database:', error.message);
+    console.log('📝 Creating in alternative location...');
+    try {
+        fs.writeFileSync('data/test_data.json', JSON.stringify(testData, null, 2));
+        console.log('✅ Created test database in data/ directory\n');
+    } catch (fallbackError) {
+        console.log('⚠️  Could not create test database, will use in-memory data\n');
+    }
+}
 
 // Create sample audio files for testing (empty files)
 console.log('🎵 Creating sample audio files for testing...');

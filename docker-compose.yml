@@ -15,11 +15,10 @@ services:
       - SUPPORTED_FORMATS=wav,flac,aiff,mp3
       - JWT_SECRET=docker_test_jwt_secret
       - SESSION_SECRET=docker_test_session_secret
-    volumes:
-      # Persist uploaded files and database
-      - ./local_storage:/app/local_storage
-      - ./test_data.json:/app/test_data.json
-      - ./sample_audio:/app/sample_audio
+    # volumes:
+      # Note: Volumes disabled for test mode to avoid permission issues
+      # Files will be created inside container and lost on restart
+      # For persistent testing, use production mode with proper volume setup
     command: >
       sh -c "
         node test-setup.js &&
