@@ -1,6 +1,9 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../config/database');
+
+// Get database instance from environment or use default
+const useTestMode = process.env.USE_LOCAL_STORAGE === 'true' || !process.env.DB_HOST;
+const db = useTestMode ? require('../config/test-database') : require('../config/database');
 
 // Simple login (for demo purposes - in production, use proper authentication)
 router.post('/login', async (req, res) => {

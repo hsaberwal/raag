@@ -14,7 +14,19 @@ let db, storageConfig;
 
 if (useTestMode) {
     console.log('🧪 Running in TEST MODE (Local Storage + File Database)');
-    db = require('./config/test-database');
+    console.log('📍 Environment variables:');
+    console.log('   USE_LOCAL_STORAGE:', process.env.USE_LOCAL_STORAGE);
+    console.log('   DB_HOST:', process.env.DB_HOST);
+    console.log('   NODE_ENV:', process.env.NODE_ENV);
+    
+    try {
+        db = require('./config/test-database');
+        console.log('✅ Test database loaded successfully');
+    } catch (error) {
+        console.error('❌ Error loading test database:', error.message);
+        process.exit(1);
+    }
+    
     storageConfig = require('./config/local-storage');
     
     // Initialize local storage
