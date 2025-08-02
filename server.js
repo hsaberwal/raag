@@ -7,38 +7,26 @@ const socketIo = require('socket.io');
 const fs = require('fs');
 require('dotenv').config();
 
-// Use test database and local storage for testing
-const useTestMode = process.env.USE_LOCAL_STORAGE === 'true' || !process.env.DB_HOST;
+// Use local storage or S3 based on environment
+const useLocalStorage = process.env.USE_LOCAL_STORAGE === 'true';
 
-// Force test mode if any PostgreSQL connection fails
-if (useTestMode) {
-    console.log('🧪 FORCING TEST MODE - NO POSTGRESQL CONNECTIONS ALLOWED');
-}
+console.log('🎵 Raag Recording System Starting...');
+console.log('📍 Environment variables:');
+console.log('   USE_LOCAL_STORAGE:', process.env.USE_LOCAL_STORAGE);
+console.log('   DB_HOST:', process.env.DB_HOST);
+console.log('   NODE_ENV:', process.env.NODE_ENV);
 
-let db, storageConfig;
+// Always use PostgreSQL (containerized)
+const db = require('./config/db');
 
-if (useTestMode) {
-    console.log('🧪 Running in TEST MODE (Local Storage + File Database)');
-    console.log('📍 Environment variables:');
-    console.log('   USE_LOCAL_STORAGE:', process.env.USE_LOCAL_STORAGE);
-    console.log('   DB_HOST:', process.env.DB_HOST);
-    console.log('   NODE_ENV:', process.env.NODE_ENV);
-    
-    try {
-        db = require('./config/test-database');
-        console.log('✅ Test database loaded successfully');
-    } catch (error) {
-        console.error('❌ Error loading test database:', error.message);
-        process.exit(1);
-    }
-    
+// Choose storage based on environment
+let storageConfig;
+if (useLocalStorage) {
+    console.log('📁 Using local file storage');
     storageConfig = require('./config/local-storage');
-    
-    // Initialize local storage
     storageConfig.initializeLocalStorage();
 } else {
-    console.log('🚀 Running in PRODUCTION MODE (PostgreSQL + S3)');
-    db = require('./config/database');
+    console.log('☁️ Using S3 storage');
     storageConfig = require('./config/s3');
 }
 
@@ -162,13 +150,13 @@ app.get('/api/health', async (req, res) => {
         const healthStatus = {
             status: 'healthy',
             timestamp: new Date().toISOString(),
-            database: useTestMode ? 'file-based (test)' : 'postgresql',
-            storage: useTestMode ? 'local-storage (test)' : 's3',
-            mode: useTestMode ? 'TEST' : 'PRODUCTION',
+            database: 'postgresql',
+            storage: useLocalStorage ? 'local-storage' : 's3',
+            mode: useLocalStorage ? 'TEST' : 'PRODUCTION',
             version: require('./package.json').version
         };
         
-        if (!useTestMode) {
+        if (!useLocalStorage) {
             // Test S3 connection only in production mode
             await storageConfig.s3.headBucket({ Bucket: storageConfig.S3_CONFIG.bucket }).promise();
             healthStatus.s3 = 'connected';
@@ -180,7 +168,7 @@ app.get('/api/health', async (req, res) => {
             status: 'unhealthy',
             error: error.message,
             timestamp: new Date().toISOString(),
-            mode: useTestMode ? 'TEST' : 'PRODUCTION'
+            mode: useLocalStorage ? 'TEST' : 'PRODUCTION'
         });
     }
 });
@@ -200,7 +188,7 @@ app.post('/api/upload', upload.single('audioFile'), async (req, res) => {
         
         let uploadResult;
         
-        if (useTestMode) {
+        if (useLocalStorage) {
             // Use local storage
             const localPath = storageConfig.generateLocalPath(fileType, {
                 ...parsedMetadata,
@@ -290,7 +278,7 @@ app.get('/api/download/:fileType/:fileId', async (req, res) => {
         const fileKey = result.rows[0].s3_key;
         let urlResult;
         
-        if (useTestMode) {
+        if (useLocalStorage) {
             // Use local storage
             urlResult = storageConfig.getLocalFileUrl(fileKey);
         } else {
@@ -304,7 +292,7 @@ app.get('/api/download/:fileType/:fileId', async (req, res) => {
         
         res.json({
             downloadUrl: urlResult.url,
-            expiresIn: useTestMode ? 'no-expiry' : 3600
+            expiresIn: useLocalStorage ? 'no-expiry' : 3600
         });
         
     } catch (error) {
@@ -342,12 +330,12 @@ const HOST = process.env.HOST || '0.0.0.0';
 server.listen(PORT, HOST, () => {
     console.log(`🎵 Raag Recording System server running on ${HOST}:${PORT}`);
     console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
-    console.log(`💾 Database: ${useTestMode ? 'File-based (test_data.json)' : process.env.DB_NAME + '@' + process.env.DB_HOST}`);
-    console.log(`📁 Storage: ${useTestMode ? 'Local Storage (./local_storage/)' : 'S3 (' + process.env.S3_BUCKET + ')'}`);
+    console.log(`💾 Database: PostgreSQL (${process.env.DB_NAME}@${process.env.DB_HOST})`);
+    console.log(`📁 Storage: ${useLocalStorage ? 'Local Storage (./local_storage/)' : 'S3 (' + process.env.S3_BUCKET + ')'}`);
     console.log(`🔗 Local: http://localhost:${PORT}`);
     console.log(`🌐 Remote: http://YOUR_SERVER_IP:${PORT}`);
     
-    if (useTestMode) {
+    if (useLocalStorage) {
         console.log('\n🧪 TEST MODE ACTIVE');
         console.log('📋 Test Login Credentials:');
         console.log('   - Username: performer1, Role: performer');
