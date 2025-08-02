@@ -50,9 +50,27 @@ const directories = [
 
 console.log('📁 Creating storage directories...');
 directories.forEach(dir => {
-    if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-        console.log(`✅ Created ${dir}`);
+    try {
+        if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true, mode: 0o775 });
+            console.log(`✅ Created ${dir}`);
+        } else {
+            console.log(`📁 Directory ${dir} already exists`);
+        }
+    } catch (error) {
+        if (error.code === 'EACCES') {
+            console.log(`⚠️  Permission denied creating ${dir}, trying alternative...`);
+            // Try to create in current user's home or temp directory as fallback
+            try {
+                const fallbackDir = dir.replace('local_storage', 'temp_storage');
+                fs.mkdirSync(fallbackDir, { recursive: true, mode: 0o775 });
+                console.log(`✅ Created fallback directory ${fallbackDir}`);
+            } catch (fallbackError) {
+                console.log(`⚠️  Could not create ${dir}, will create at runtime if needed`);
+            }
+        } else {
+            console.log(`⚠️  Error creating ${dir}:`, error.message);
+        }
     }
 });
 

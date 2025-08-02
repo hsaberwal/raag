@@ -19,17 +19,15 @@ RUN npm install --omit=dev
 # Copy application code
 COPY . .
 
-# Create necessary directories
-RUN mkdir -p local_storage temp_uploads sample_audio
-
-# Set proper permissions
-RUN chmod +x test-setup.js
-RUN chmod -R 755 local_storage temp_uploads sample_audio
-
 # Create non-root user for security
 RUN addgroup -g 1001 -S nodejs
 RUN adduser -S raag -u 1001
+
+# Create necessary directories and set permissions
+RUN mkdir -p local_storage temp_uploads sample_audio
+RUN chmod +x test-setup.js
 RUN chown -R raag:nodejs /app
+RUN chmod -R 775 /app
 
 # Switch to non-root user
 USER raag
