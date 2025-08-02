@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Raag Recording System - Guru Granth Sahib</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+    <style>
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .audio-player {
+            background: linear-gradient(45deg, #1a1a1a, #2d2d2d);
+        }
+        .status-pending { color: #f59e0b; }
+        .status-approved { color: #10b981; }
+        .status-rejected { color: #ef4444; }
+        .status-needs-revision { color: #f97316; }
+        .raag-card {
+            transition: all 0.3s ease;
+            border-left: 4px solid transparent;
+        }
+        .raag-card:hover {
+            transform: translateY(-4px);
+            border-left-color: #6366f1;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- Navigation -->
+    <nav class="gradient-bg text-white shadow-lg">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex items-center">
+                    <i class="fas fa-music text-2xl mr-3"></i>
+                    <h1 class="text-xl font-bold">Raag Recording System</h1>
+                    <span class="ml-3 text-sm opacity-80">Guru Granth Sahib</span>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <div id="userInfo" class="hidden">
+                        <span id="userName" class="font-medium"></span>
+                        <span id="userRole" class="text-sm opacity-80 ml-2"></span>
+                    </div>
+                    <button id="logoutBtn" class="hidden bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg transition-colors">
+                        Logout
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Login Modal -->
+    <div id="loginModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg p-8 max-w-md w-full mx-4">
+            <h2 class="text-2xl font-bold mb-6 text-center text-gray-800">
+                <i class="fas fa-sign-in-alt mr-2"></i>Login to Raag System
+            </h2>
+            <form id="loginForm">
+                <div class="mb-4">
+                    <label class="block text-gray-700 text-sm font-bold mb-2">Username</label>
+                    <input type="text" id="username" required 
+                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <div class="mb-6">
+                    <label class="block text-gray-700 text-sm font-bold mb-2">Role</label>
+                    <select id="role" required 
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        <option value="">Select your role</option>
+                        <option value="performer">Performer</option>
+                        <option value="approver">Approver</option>
+                        <option value="mixer">Mixer</option>
+                        <option value="narrator">Narrator</option>
+                        <option value="administrator">Administrator</option>
+                    </select>
+                </div>
+                <button type="submit" 
+                        class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">
+                    Login
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div id="mainContent" class="hidden">
+        <!-- Role-specific navigation -->
+        <div class="bg-white shadow-sm border-b">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <nav class="flex space-x-8 py-4">
+                    <button class="nav-tab active" data-tab="dashboard">
+                        <i class="fas fa-chart-line mr-2"></i>Dashboard
+                    </button>
+                    <button class="nav-tab" data-tab="shabads">
+                        <i class="fas fa-book mr-2"></i>Shabads
+                    </button>
+                    <button class="nav-tab performer-only mixer-only" data-tab="recordings">
+                        <i class="fas fa-microphone mr-2"></i>Recordings
+                    </button>
+                    <button class="nav-tab approver-only" data-tab="approvals">
+                        <i class="fas fa-check-circle mr-2"></i>Approvals
+                    </button>
+                    <button class="nav-tab" data-tab="communications">
+                        <i class="fas fa-comments mr-2"></i>Messages
+                    </button>
+                </nav>
+            </div>
+        </div>
+
+        <!-- Tab Content -->
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            
+            <!-- Dashboard Tab -->
+            <div id="dashboard-tab" class="tab-content">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                    <div class="bg-white rounded-lg shadow-lg p-6">
+                        <div class="flex items-center">
+                            <div class="p-3 bg-blue-100 rounded-full">
+                                <i class="fas fa-book text-blue-600 text-xl"></i>
+                            </div>
+                            <div class="ml-4">
+                                <p class="text-gray-500 text-sm">Total Shabads</p>
+                                <p id="totalShabads" class="text-2xl font-bold text-gray-900">-</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white rounded-lg shadow-lg p-6">
+                        <div class="flex items-center">
+                            <div class="p-3 bg-green-100 rounded-full">
+                                <i class="fas fa-microphone text-green-600 text-xl"></i>
+                            </div>
+                            <div class="ml-4">
+                                <p class="text-gray-500 text-sm">Recording Sessions</p>
+                                <p id="totalSessions" class="text-2xl font-bold text-gray-900">-</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white rounded-lg shadow-lg p-6">
+                        <div class="flex items-center">
+                            <div class="p-3 bg-yellow-100 rounded-full">
+                                <i class="fas fa-clock text-yellow-600 text-xl"></i>
+                            </div>
+                            <div class="ml-4">
+                                <p class="text-gray-500 text-sm">Pending Approvals</p>
+                                <p id="pendingApprovals" class="text-2xl font-bold text-gray-900">-</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white rounded-lg shadow-lg p-6">
+                        <div class="flex items-center">
+                            <div class="p-3 bg-purple-100 rounded-full">
+                                <i class="fas fa-check-circle text-purple-600 text-xl"></i>
+                            </div>
+                            <div class="ml-4">
+                                <p class="text-gray-500 text-sm">Completed</p>
+                                <p id="completedShabads" class="text-2xl font-bold text-gray-900">-</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div class="bg-white rounded-lg shadow-lg p-6">
+                        <h3 class="text-lg font-bold mb-4">Recent Activity</h3>
+                        <div id="recentActivity" class="space-y-4">
+                            <!-- Recent activity items will be populated here -->
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white rounded-lg shadow-lg p-6">
+                        <h3 class="text-lg font-bold mb-4">Raag Progress</h3>
+                        <div id="raagProgress" class="space-y-3">
+                            <!-- Raag progress will be populated here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Shabads Tab -->
+            <div id="shabads-tab" class="tab-content hidden">
+                <div class="bg-white rounded-lg shadow-lg">
+                    <div class="p-6 border-b border-gray-200">
+                        <div class="flex justify-between items-center">
+                            <h2 class="text-xl font-bold">Shabads Collection</h2>
+                            <div class="flex space-x-4">
+                                <select id="raagFilter" class="px-4 py-2 border border-gray-300 rounded-lg">
+                                    <option value="">All Raags</option>
+                                </select>
+                                <input type="text" id="shabadSearch" placeholder="Search shabads..." 
+                                       class="px-4 py-2 border border-gray-300 rounded-lg">
+                            </div>
+                        </div>
+                    </div>
+                    <div id="shabadsList" class="p-6">
+                        <!-- Shabads will be loaded here -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recordings Tab -->
+            <div id="recordings-tab" class="tab-content hidden">
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div class="lg:col-span-2">
+                        <div class="bg-white rounded-lg shadow-lg">
+                            <div class="p-6 border-b border-gray-200">
+                                <h2 class="text-xl font-bold">Recording Sessions</h2>
+                            </div>
+                            <div id="recordingsList" class="p-6">
+                                <!-- Recording sessions will be loaded here -->
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <div class="bg-white rounded-lg shadow-lg p-6">
+                            <h3 class="text-lg font-bold mb-4">Quick Actions</h3>
+                            <div class="space-y-3">
+                                <button id="newSessionBtn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-4 rounded-lg transition-colors">
+                                    <i class="fas fa-plus mr-2"></i>New Session
+                                </button>
+                                <button id="uploadTrackBtn" class="w-full bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-lg transition-colors">
+                                    <i class="fas fa-upload mr-2"></i>Upload Track
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Approvals Tab -->
+            <div id="approvals-tab" class="tab-content hidden">
+                <div class="bg-white rounded-lg shadow-lg">
+                    <div class="p-6 border-b border-gray-200">
+                        <h2 class="text-xl font-bold">Pending Approvals</h2>
+                    </div>
+                    <div id="approvalsList" class="p-6">
+                        <!-- Pending approvals will be loaded here -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Communications Tab -->
+            <div id="communications-tab" class="tab-content hidden">
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div class="lg:col-span-2">
+                        <div class="bg-white rounded-lg shadow-lg">
+                            <div class="p-6 border-b border-gray-200">
+                                <h2 class="text-xl font-bold">Messages</h2>
+                            </div>
+                            <div id="messagesList" class="p-6">
+                                <!-- Messages will be loaded here -->
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <div class="bg-white rounded-lg shadow-lg p-6">
+                            <h3 class="text-lg font-bold mb-4">Send Message</h3>
+                            <form id="messageForm">
+                                <div class="mb-4">
+                                    <select id="messageRecipient" required class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+                                        <option value="">Select recipient</option>
+                                    </select>
+                                </div>
+                                <div class="mb-4">
+                                    <input type="text" id="messageSubject" placeholder="Subject" required
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+                                </div>
+                                <div class="mb-4">
+                                    <textarea id="messageContent" placeholder="Message content" rows="4" required
+                                              class="w-full px-3 py-2 border border-gray-300 rounded-lg"></textarea>
+                                </div>
+                                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg transition-colors">
+                                    Send Message
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Audio Player Modal -->
+    <div id="audioModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-lg p-6 max-w-lg w-full mx-4">
+            <div class="flex justify-between items-center mb-4">
+                <h3 id="audioTitle" class="text-lg font-bold">Audio Player</h3>
+                <button id="closeAudioModal" class="text-gray-500 hover:text-gray-700">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+            <div class="audio-player rounded-lg p-4 text-white">
+                <audio id="audioPlayer" controls class="w-full">
+                    Your browser does not support the audio element.
+                </audio>
+            </div>
+            <div id="audioMetadata" class="mt-4 text-sm text-gray-600">
+                <!-- Audio metadata will be displayed here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- File Upload Modal -->
+    <div id="uploadModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-lg p-6 max-w-lg w-full mx-4">
+            <h3 class="text-lg font-bold mb-4">Upload Audio File</h3>
+            <form id="uploadForm" enctype="multipart/form-data">
+                <div class="mb-4">
+                    <label class="block text-gray-700 text-sm font-bold mb-2">Audio File</label>
+                    <input type="file" id="audioFile" accept=".wav,.flac,.aiff" required
+                           class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+                    <p class="text-xs text-gray-500 mt-1">Supported formats: WAV, FLAC, AIFF (Max: 500MB)</p>
+                </div>
+                <div class="mb-4">
+                    <label class="block text-gray-700 text-sm font-bold mb-2">Track Name</label>
+                    <input type="text" id="trackName" required
+                           class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+                </div>
+                <div class="mb-4">
+                    <label class="block text-gray-700 text-sm font-bold mb-2">Instrument</label>
+                    <input type="text" id="instrument"
+                           class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+                </div>
+                <div class="mb-4">
+                    <label class="block text-gray-700 text-sm font-bold mb-2">Track Type</label>
+                    <select id="trackType" required class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+                        <option value="">Select type</option>
+                        <option value="vocal">Vocal</option>
+                        <option value="instrumental">Instrumental</option>
+                        <option value="percussion">Percussion</option>
+                        <option value="harmony">Harmony</option>
+                    </select>
+                </div>
+                <div class="flex justify-end space-x-4">
+                    <button type="button" id="cancelUpload" class="px-4 py-2 border border-gray-300 rounded-lg">
+                        Cancel
+                    </button>
+                    <button type="submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg">
+                        Upload
+                    </button>
+                </div>
+            </form>
+            <div id="uploadProgress" class="hidden mt-4">
+                <div class="bg-gray-200 rounded-full h-2">
+                    <div id="progressBar" class="bg-blue-600 h-2 rounded-full" style="width: 0%"></div>
+                </div>
+                <p id="progressText" class="text-sm text-gray-600 mt-2">Uploading...</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
