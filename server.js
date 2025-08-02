@@ -10,6 +10,11 @@ require('dotenv').config();
 // Use test database and local storage for testing
 const useTestMode = process.env.USE_LOCAL_STORAGE === 'true' || !process.env.DB_HOST;
 
+// Force test mode if any PostgreSQL connection fails
+if (useTestMode) {
+    console.log('🧪 FORCING TEST MODE - NO POSTGRESQL CONNECTIONS ALLOWED');
+}
+
 let db, storageConfig;
 
 if (useTestMode) {
