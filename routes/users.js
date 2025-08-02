@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../config/database');
+const db = require('../config/db');
 
 // Get all users with filtering
 router.get('/', async (req, res) => {

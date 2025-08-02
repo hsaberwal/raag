@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../config/database');
+const db = require('../config/db');
 
 // Get all pending approvals for an approver
 router.get('/pending/:approverId', async (req, res) => {
