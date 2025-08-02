@@ -7,7 +7,15 @@
     "start": "node server.js",
     "dev": "nodemon server.js",
     "build": "webpack --mode production",
-    "dev-client": "webpack serve --mode development"
+    "dev-client": "webpack serve --mode development",
+    "test-setup": "node test-setup.js",
+    "test-server": "npm run test-setup && node server.js",
+    "test": "npm run test-setup && echo 'Test setup complete! Run: npm start'",
+    "docker:start": "./docker-scripts.sh start",
+    "docker:stop": "./docker-scripts.sh stop",
+    "docker:logs": "./docker-scripts.sh logs",
+    "docker:status": "./docker-scripts.sh status",
+    "docker:build": "./docker-scripts.sh build"
   },
   "dependencies": {
     "express": "^4.18.2",
