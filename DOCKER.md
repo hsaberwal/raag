@@ -9,7 +9,7 @@ Run the complete Raag Recording System in Docker containers with zero configurat
 ./docker-scripts.sh start
 ```
 
-That's it! The system will be running at **http://localhost:3000**
+That's it! The system will be running at **http://localhost:5200**
 
 ## 📋 Prerequisites
 
@@ -42,7 +42,7 @@ docker-compose up -d raag-app
 - ✅ JSON database (no PostgreSQL needed)
 - ✅ Sample data pre-loaded
 - ✅ Ready in 30 seconds
-- ✅ Access at: http://localhost:3000
+- ✅ Access at: http://localhost:5200
 
 ### 2. 🚀 Production Mode (With PostgreSQL)
 **Full production setup with database:**
@@ -56,7 +56,7 @@ docker-compose up -d raag-app
 - ✅ PostgreSQL database
 - ✅ Production-ready configuration
 - ✅ Persistent data storage
-- ✅ Access at: http://localhost:3001
+- ✅ Access at: http://localhost:5201
 - ⚠️ Requires AWS S3 configuration
 
 ### 3. 🏗️ Custom Build
@@ -67,7 +67,7 @@ docker-compose up -d raag-app
 docker build -t raag-recording-system .
 
 # Run test mode
-docker run -p 3000:3000 -e USE_LOCAL_STORAGE=true raag-recording-system
+docker run -p 5200:3000 -e USE_LOCAL_STORAGE=true raag-recording-system
 ```
 
 ## 📜 Docker Management Commands
@@ -153,7 +153,7 @@ Built-in health checks:
 docker ps
 
 # Check application health
-curl http://localhost:3000/api/health
+curl http://localhost:5200/api/health
 
 # View health status
 ./docker-scripts.sh status
@@ -174,14 +174,14 @@ Response example:
 
 ### Port Already in Use
 ```bash
-# Check what's using port 3000
-lsof -i :3000
+# Check what's using port 5200
+lsof -i :5200
 
 # Kill the process
 ./docker-scripts.sh stop
 
 # Or use different port
-docker run -p 3001:3000 raag-recording-system
+docker run -p 5202:3000 raag-recording-system
 ```
 
 ### Container Won't Start
@@ -237,7 +237,7 @@ rm test_data.json
 ### 1. Quick Functionality Test
 ```bash
 ./docker-scripts.sh start
-# Open http://localhost:3000
+# Open http://localhost:5200
 # Login as performer1
 # Upload a file from sample_audio/
 # Switch to approver1 and approve it
@@ -261,7 +261,7 @@ rm test_data.json
 ffmpeg -f lavfi -i "sine=frequency=440:duration=5" test.wav
 
 # Upload through the UI or API
-curl -X POST http://localhost:3000/api/upload \
+curl -X POST http://localhost:5200/api/upload \
   -F "audioFile=@test.wav" \
   -F "fileType=raw_track"
 ```
@@ -333,7 +333,7 @@ docker exec raag-postgres psql -U raag_user -d raag_recording_system -c "SELECT 
 
 ## 🎯 Next Steps
 
-1. **Start Testing**: `./docker-scripts.sh start`
+1. **Start Testing**: `./docker-scripts.sh start` → http://localhost:5200
 2. **Explore Features**: Try different user roles
 3. **Upload Files**: Test the complete workflow
 4. **Scale Up**: Move to production mode when ready

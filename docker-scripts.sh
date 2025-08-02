@@ -61,7 +61,7 @@ start_test() {
     sleep 10
     
     print_status "System is starting up!"
-    print_status "🌐 Access the application at: http://localhost:3000"
+    print_status "🌐 Access the application at: http://localhost:5200"
     print_status "📋 Test credentials:"
     print_status "   - Username: performer1, Role: performer"
     print_status "   - Username: approver1, Role: approver"
@@ -98,7 +98,7 @@ EOF
     docker-compose --profile production up -d
     
     print_status "Production system starting..."
-    print_status "🌐 Access the application at: http://localhost:3001"
+    print_status "🌐 Access the application at: http://localhost:5201"
     
     echo -e "\n${GREEN}✅ Production system is ready!${NC}\n"
 }
@@ -149,13 +149,13 @@ status() {
     docker-compose ps
     
     echo -e "\n${BLUE}Health Check:${NC}"
-    if curl -f http://localhost:3000/api/health 2>/dev/null; then
+    if curl -f http://localhost:5200/api/health 2>/dev/null; then
         echo -e "${GREEN}✅ Test mode application is healthy${NC}"
     else
         echo -e "${RED}❌ Test mode application is not responding${NC}"
     fi
     
-    if curl -f http://localhost:3001/api/health 2>/dev/null; then
+    if curl -f http://localhost:5201/api/health 2>/dev/null; then
         echo -e "${GREEN}✅ Production mode application is healthy${NC}"
     else
         echo -e "${YELLOW}⚠️  Production mode application is not running${NC}"
@@ -191,12 +191,12 @@ help() {
     echo "  $0 logs        # View what's happening"
     echo ""
     echo "Test Mode (default):"
-    echo "  🌐 http://localhost:3000"
+    echo "  🌐 http://localhost:5200"
     echo "  💾 Uses local file storage + JSON database"
     echo "  🧪 No AWS or PostgreSQL required"
     echo ""
     echo "Production Mode:"
-    echo "  🌐 http://localhost:3001"
+    echo "  🌐 http://localhost:5201"
     echo "  💾 Uses PostgreSQL + AWS S3"
     echo "  🔐 Requires .env.production configuration"
 }

@@ -6,7 +6,7 @@ services:
     build: .
     container_name: raag-recording-system
     ports:
-      - "3000:3000"
+      - "5200:3000"
     environment:
       # Test mode configuration (default)
       - USE_LOCAL_STORAGE=true
@@ -55,7 +55,7 @@ services:
     build: .
     container_name: raag-recording-system-prod
     ports:
-      - "3001:3000"
+      - "5201:3000"
     environment:
       # Production mode configuration
       - USE_LOCAL_STORAGE=false

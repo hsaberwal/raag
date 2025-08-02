@@ -35,7 +35,7 @@ You should see:
 🎵 Raag Recording System server running on port 3000
 💾 Database: File-based (test_data.json)
 📁 Storage: Local Storage (./local_storage/)
-🔗 Open: http://localhost:3000
+🔗 Open: http://localhost:5200
 
 🧪 TEST MODE ACTIVE
 📋 Test Login Credentials:
@@ -46,7 +46,7 @@ You should see:
 ```
 
 ### Step 4: Open and Test
-1. Open your browser to: **http://localhost:3000**
+1. Open your browser to: **http://localhost:5200**
 2. Login with test credentials (e.g., username: `performer1`, role: `performer`)
 3. Explore the different features!
 
@@ -114,11 +114,11 @@ raag-recording-system/
 
 ### Port Already in Use
 ```bash
-# Kill process on port 3000
-npx kill-port 3000
+# Kill process on port 5200  
+npx kill-port 5200
 
 # Or use a different port
-PORT=3001 npm start
+PORT=5201 npm start
 ```
 
 ### Permission Errors
@@ -185,19 +185,19 @@ The system will automatically switch to production mode!
 ### API Testing
 ```bash
 # Health check
-curl http://localhost:3000/api/health
+curl http://localhost:5200/api/health
 
 # Get shabads
-curl http://localhost:3000/api/shabads
+curl http://localhost:5200/api/shabads
 
 # Get raags
-curl http://localhost:3000/api/shabads/raags/all
+curl http://localhost:5200/api/shabads/raags/all
 ```
 
 ### File Upload Testing
 ```bash
 # Upload via API (with authentication)
-curl -X POST http://localhost:3000/api/upload \
+curl -X POST http://localhost:5200/api/upload \
   -H "Authorization: Bearer demo_token_1" \
   -F "audioFile=@sample_audio/sample_vocal.wav" \
   -F "fileType=raw_track" \
