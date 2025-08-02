@@ -6,7 +6,7 @@ README.md
 QUICKSTART.md
 .env
 .env.example
-.env.test
+# .env.test - NEEDED for Docker test setup
 Dockerfile
 docker-compose.yml
 .dockerignore
