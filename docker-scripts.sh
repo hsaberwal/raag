@@ -61,7 +61,8 @@ start_test() {
     sleep 10
     
     print_status "System is starting up!"
-    print_status "🌐 Access the application at: http://localhost:5200"
+    print_status "🌐 Local Access:  http://localhost:5200"
+print_status "🌍 Remote Access: http://YOUR_SERVER_IP:5200"
     print_status "📋 Test credentials:"
     print_status "   - Username: performer1, Role: performer"
     print_status "   - Username: approver1, Role: approver"
@@ -191,7 +192,8 @@ help() {
     echo "  $0 logs        # View what's happening"
     echo ""
     echo "Test Mode (default):"
-    echo "  🌐 http://localhost:5200"
+    echo "  🌐 Local:  http://localhost:5200"
+  echo "  🌍 Remote: http://YOUR_SERVER_IP:5200"
     echo "  💾 Uses local file storage + JSON database"
     echo "  🧪 No AWS or PostgreSQL required"
     echo ""

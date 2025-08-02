@@ -10,6 +10,7 @@ services:
       - USE_LOCAL_STORAGE=true
       - NODE_ENV=development
       - PORT=3000
+      - HOST=0.0.0.0
       - MAX_FILE_SIZE_MB=100
       - SUPPORTED_FORMATS=wav,flac,aiff,mp3
       - JWT_SECRET=docker_test_jwt_secret

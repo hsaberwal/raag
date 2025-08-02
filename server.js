@@ -320,13 +320,15 @@ app.get('*', (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
+const HOST = process.env.HOST || '0.0.0.0';
 
-server.listen(PORT, () => {
-    console.log(`🎵 Raag Recording System server running on port ${PORT}`);
+server.listen(PORT, HOST, () => {
+    console.log(`🎵 Raag Recording System server running on ${HOST}:${PORT}`);
     console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
     console.log(`💾 Database: ${useTestMode ? 'File-based (test_data.json)' : process.env.DB_NAME + '@' + process.env.DB_HOST}`);
     console.log(`📁 Storage: ${useTestMode ? 'Local Storage (./local_storage/)' : 'S3 (' + process.env.S3_BUCKET + ')'}`);
-    console.log(`🔗 Open: http://localhost:${PORT}`);
+    console.log(`🔗 Local: http://localhost:${PORT}`);
+    console.log(`🌐 Remote: http://YOUR_SERVER_IP:${PORT}`);
     
     if (useTestMode) {
         console.log('\n🧪 TEST MODE ACTIVE');
