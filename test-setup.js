@@ -9,8 +9,33 @@ console.log('🎵 Setting up Raag Recording System for Testing...\n');
 // Create test environment file
 if (!fs.existsSync('.env')) {
     console.log('📝 Creating .env file for testing...');
-    fs.copyFileSync('.env.test', '.env');
-    console.log('✅ Created .env file (using local storage, no AWS required)\n');
+    
+    if (fs.existsSync('.env.test')) {
+        fs.copyFileSync('.env.test', '.env');
+        console.log('✅ Created .env file from .env.test\n');
+    } else {
+        // Create a basic .env file if .env.test is missing
+        console.log('⚠️  .env.test not found, creating basic .env file...');
+        const envContent = `# Test Environment Configuration
+DB_TYPE=file
+USE_LOCAL_STORAGE=true
+LOCAL_STORAGE_PATH=./local_storage
+PORT=3000
+HOST=0.0.0.0
+NODE_ENV=development
+JWT_SECRET=test_jwt_secret_key_for_demo
+SESSION_SECRET=test_session_secret_key
+MAX_FILE_SIZE_MB=50
+SUPPORTED_FORMATS=wav,flac,aiff,mp3
+DEFAULT_SAMPLE_RATE=48000
+DEFAULT_BIT_DEPTH=24
+ENABLE_EMAIL=false
+STUDIO_NAME=Test Raag Recording Studio
+STUDIO_LOCATION=Test Location
+`;
+        fs.writeFileSync('.env', envContent);
+        console.log('✅ Created basic .env file for testing\n');
+    }
 }
 
 // Create directories for local storage
