@@ -30,10 +30,11 @@ if (useLocalStorage) {
     storageConfig = require('./config/s3');
 }
 
-// Import routes - we'll need to modify these to work with either storage system
+// Import routes for professional recording workflow
 const authRoutes = require('./routes/auth');
 const shabadRoutes = require('./routes/shabads');
 const recordingRoutes = require('./routes/recordings');
+const mixingRoutes = require('./routes/mixing');
 const approvalRoutes = require('./routes/approvals');
 const communicationRoutes = require('./routes/communications');
 const userRoutes = require('./routes/users');
@@ -137,6 +138,7 @@ app.set('io', io);
 app.use('/api/auth', authRoutes);
 app.use('/api/shabads', shabadRoutes);
 app.use('/api/recordings', recordingRoutes);
+app.use('/api/mixing', mixingRoutes);
 app.use('/api/approvals', approvalRoutes);
 app.use('/api/communications', communicationRoutes);
 app.use('/api/users', userRoutes);
