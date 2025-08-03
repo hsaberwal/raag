@@ -80,4 +80,24 @@ router.get('/me', async (req, res) => {
     }
 });
 
+// Get all users (for testing/admin purposes)
+router.get('/users', async (req, res) => {
+    try {
+        const query = `
+            SELECT user_id, username, role, full_name, active, created_at
+            FROM users 
+            ORDER BY created_at DESC
+        `;
+        const result = await db.query(query);
+        
+        res.json({
+            users: result.rows,
+            total: result.rows.length
+        });
+    } catch (error) {
+        console.error('Error fetching users:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 module.exports = router;
