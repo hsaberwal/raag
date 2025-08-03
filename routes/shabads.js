@@ -372,4 +372,34 @@ router.get('/meta/raags', async (req, res) => {
     }
 });
 
+// Get all raags (legacy endpoint for frontend compatibility)
+router.get('/raags/all', async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                r.raag_id,
+                r.name,
+                r.thaat,
+                r.time_of_day,
+                r.mood,
+                r.notes,
+                COUNT(s.shabad_id) as shabad_count
+            FROM raags r
+            LEFT JOIN shabads s ON r.raag_id = s.raag_id
+            GROUP BY r.raag_id, r.name, r.thaat, r.time_of_day, r.mood, r.notes
+            ORDER BY r.name ASC
+        `;
+        
+        const result = await db.query(query);
+        
+        res.json({
+            raags: result.rows,
+            total: result.rows.length
+        });
+    } catch (error) {
+        console.error('Error fetching all raags:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 module.exports = router;

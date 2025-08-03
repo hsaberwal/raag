@@ -80,6 +80,36 @@ router.get('/me', async (req, res) => {
     }
 });
 
+// Get current user info (for frontend authentication check)
+router.get('/me', async (req, res) => {
+    try {
+        // In a real app, this would use session/token authentication
+        // For demo, we'll return a default user or handle based on headers
+        const authHeader = req.headers.authorization;
+        if (!authHeader) {
+            return res.status(401).json({ error: 'Not authenticated' });
+        }
+
+        // Simple demo: extract username from auth header or use default
+        const username = req.headers['x-username'] || 'performer1';
+        
+        const query = `SELECT user_id, username, role, full_name, active FROM users WHERE username = $1`;
+        const result = await db.query(query, [username]);
+        
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        res.json({
+            success: true,
+            user: result.rows[0]
+        });
+    } catch (error) {
+        console.error('Error fetching current user:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // Get all users (for testing/admin purposes)
 router.get('/users', async (req, res) => {
     try {

@@ -564,4 +564,28 @@ router.get('/pending-approvals', async (req, res) => {
     }
 });
 
+// Get recording statistics for dashboard
+router.get('/statistics', async (req, res) => {
+    try {
+        const queries = await Promise.all([
+            db.query('SELECT COUNT(*) as total_sessions FROM recording_sessions'),
+            db.query('SELECT COUNT(*) as approved_sessions FROM recording_sessions WHERE approval_status = \'approved\''),
+            db.query('SELECT COUNT(*) as pending_sessions FROM recording_sessions WHERE approval_status = \'pending\''),
+            db.query('SELECT COUNT(*) as total_tracks FROM track_files')
+        ]);
+
+        const stats = {
+            total_sessions: parseInt(queries[0].rows[0].total_sessions),
+            approved_sessions: parseInt(queries[1].rows[0].approved_sessions),
+            pending_sessions: parseInt(queries[2].rows[0].pending_sessions),
+            total_tracks: parseInt(queries[3].rows[0].total_tracks)
+        };
+
+        res.json(stats);
+    } catch (error) {
+        console.error('Error fetching recording statistics:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 module.exports = router;
