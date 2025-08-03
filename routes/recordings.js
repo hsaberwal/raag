@@ -1,395 +1,565 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../config/db');
-const s3Config = require('../config/s3');
 
-// Create a new recording session
-router.post('/sessions', async (req, res) => {
+// Get all recording sessions with filtering
+router.get('/sessions', async (req, res) => {
     try {
-        const {
-            shabadId,
-            sessionName,
-            studioLocation,
-            sessionDate,
-            sessionStartTime,
-            notes,
-            createdBy
-        } = req.body;
-
-        const query = `
-            INSERT INTO recording_sessions 
-            (shabad_id, session_name, studio_location, session_date, session_start_time, notes, created_by)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
-            RETURNING *
-        `;
-
-        const result = await db.query(query, [
-            shabadId, sessionName, studioLocation, sessionDate, 
-            sessionStartTime, notes, createdBy
-        ]);
-
-        res.status(201).json({
-            success: true,
-            session: result.rows[0]
-        });
-    } catch (error) {
-        console.error('Error creating recording session:', error);
-        res.status(500).json({ error: error.message });
-    }
-});
-
-// Get all recording sessions for a shabad
-router.get('/sessions/shabad/:shabadId', async (req, res) => {
-    try {
-        const { shabadId } = req.params;
+        const { 
+            page = 1, 
+            limit = 20, 
+            shabad_id, 
+            status, 
+            artist_id,
+            location 
+        } = req.query;
+        
+        const offset = (page - 1) * limit;
+        let whereClause = 'WHERE 1=1';
+        let params = [];
+        let paramCount = 0;
+        
+        if (shabad_id) {
+            paramCount++;
+            whereClause += ` AND rs.shabad_id = $${paramCount}`;
+            params.push(shabad_id);
+        }
+        
+        if (status) {
+            paramCount++;
+            whereClause += ` AND rs.approval_status = $${paramCount}`;
+            params.push(status);
+        }
+        
+        if (artist_id) {
+            paramCount++;
+            whereClause += ` AND (rs.primary_artist_id = $${paramCount} OR rs.recording_engineer_id = $${paramCount})`;
+            params.push(artist_id);
+            paramCount++; // Since we used the parameter twice
+        }
+        
+        if (location) {
+            paramCount++;
+            whereClause += ` AND rs.location ILIKE $${paramCount}`;
+            params.push(`%${location}%`);
+        }
         
         const query = `
-            SELECT rs.*, 
-                   s.first_line as shabad_first_line,
-                   r.name as raag_name,
-                   u.full_name as created_by_name,
-                   COUNT(t.id) as track_count
+            SELECT 
+                rs.*,
+                s.title as shabad_title,
+                r.name as raag_name,
+                pa.name as primary_artist_name,
+                re.name as recording_engineer_name,
+                (SELECT COUNT(*) FROM track_files tf WHERE tf.session_id = rs.session_id) as track_count,
+                (SELECT COUNT(*) FROM track_files tf WHERE tf.session_id = rs.session_id AND tf.approval_status = 'approved') as approved_tracks
             FROM recording_sessions rs
-            JOIN shabads s ON rs.shabad_id = s.id
-            JOIN raags r ON s.raag_id = r.id
-            LEFT JOIN users u ON rs.created_by = u.id
-            LEFT JOIN tracks t ON rs.id = t.session_id
-            WHERE rs.shabad_id = $1
-            GROUP BY rs.id, s.first_line, r.name, u.full_name
-            ORDER BY rs.created_at DESC
+            LEFT JOIN shabads s ON rs.shabad_id = s.shabad_id
+            LEFT JOIN raags r ON s.raag_id = r.raag_id
+            LEFT JOIN artists pa ON rs.primary_artist_id = pa.artist_id
+            LEFT JOIN artists re ON rs.recording_engineer_id = re.artist_id
+            ${whereClause}
+            ORDER BY rs.start_time DESC
+            LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}
         `;
-
-        const result = await db.query(query, [shabadId]);
-
+        
+        params.push(parseInt(limit), parseInt(offset));
+        
+        const result = await db.query(query, params);
+        
+        // Get total count
+        const countQuery = `
+            SELECT COUNT(*) as total
+            FROM recording_sessions rs
+            LEFT JOIN shabads s ON rs.shabad_id = s.shabad_id
+            ${whereClause}
+        `;
+        
+        const countResult = await db.query(countQuery, params.slice(0, paramCount));
+        const total = parseInt(countResult.rows[0].total);
+        
         res.json({
-            success: true,
-            sessions: result.rows
+            sessions: result.rows,
+            pagination: {
+                page: parseInt(page),
+                limit: parseInt(limit),
+                total,
+                pages: Math.ceil(total / limit)
+            }
         });
+        
     } catch (error) {
         console.error('Error fetching recording sessions:', error);
         res.status(500).json({ error: error.message });
     }
 });
 
-// Get a specific recording session with all tracks
-router.get('/sessions/:sessionId', async (req, res) => {
+// Create new recording session
+router.post('/sessions', async (req, res) => {
     try {
-        const { sessionId } = req.params;
+        const {
+            session_id,
+            shabad_id,
+            start_time,
+            end_time,
+            location,
+            primary_artist_id,
+            recording_engineer_id,
+            equipment_used,
+            take_number = 1,
+            file_format_quality,
+            duration,
+            notes
+        } = req.body;
+        
+        const query = `
+            INSERT INTO recording_sessions (
+                session_id, shabad_id, start_time, end_time, location,
+                primary_artist_id, recording_engineer_id, equipment_used,
+                take_number, file_format_quality, duration, notes, approval_status
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'pending')
+            RETURNING *
+        `;
+        
+        const result = await db.query(query, [
+            session_id, shabad_id, start_time, end_time, location,
+            primary_artist_id, recording_engineer_id, equipment_used,
+            take_number, file_format_quality, duration, notes
+        ]);
+        
+        res.status(201).json({
+            success: true,
+            session: result.rows[0]
+        });
+        
+    } catch (error) {
+        console.error('Error creating recording session:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get specific recording session with tracks
+router.get('/sessions/:session_id', async (req, res) => {
+    try {
+        const { session_id } = req.params;
         
         // Get session details
         const sessionQuery = `
-            SELECT rs.*, 
-                   s.first_line as shabad_first_line,
-                   s.ang_number,
-                   r.name as raag_name,
-                   u.full_name as created_by_name
+            SELECT 
+                rs.*,
+                s.title as shabad_title,
+                s.author as shabad_author,
+                r.name as raag_name,
+                pa.name as primary_artist_name,
+                pa.specialization as primary_artist_specialization,
+                re.name as recording_engineer_name
             FROM recording_sessions rs
-            JOIN shabads s ON rs.shabad_id = s.id
-            JOIN raags r ON s.raag_id = r.id
-            LEFT JOIN users u ON rs.created_by = u.id
-            WHERE rs.id = $1
+            LEFT JOIN shabads s ON rs.shabad_id = s.shabad_id
+            LEFT JOIN raags r ON s.raag_id = r.raag_id
+            LEFT JOIN artists pa ON rs.primary_artist_id = pa.artist_id
+            LEFT JOIN artists re ON rs.recording_engineer_id = re.artist_id
+            WHERE rs.session_id = $1
         `;
-
-        // Get all tracks for this session
-        const tracksQuery = `
-            SELECT t.*, 
-                   u.full_name as performer_name,
-                   u.role as performer_role,
-                   a.status as approval_status,
-                   a.comments as approval_comments,
-                   a.decision_date as approval_date,
-                   approver.full_name as approver_name
-            FROM tracks t
-            JOIN users u ON t.performer_id = u.id
-            LEFT JOIN approvals a ON a.item_type = 'track' AND a.item_id = t.id
-            LEFT JOIN users approver ON a.approver_id = approver.id
-            WHERE t.session_id = $1
-            ORDER BY t.track_number
-        `;
-
-        const [sessionResult, tracksResult] = await Promise.all([
-            db.query(sessionQuery, [sessionId]),
-            db.query(tracksQuery, [sessionId])
-        ]);
-
+        
+        const sessionResult = await db.query(sessionQuery, [session_id]);
+        
         if (sessionResult.rows.length === 0) {
             return res.status(404).json({ error: 'Recording session not found' });
         }
-
+        
+        // Get track files for this session
+        const tracksQuery = `
+            SELECT 
+                tf.*,
+                p.name as performer_name,
+                p.specialization as performer_specialization,
+                i.name as instrument_name,
+                i.category as instrument_category
+            FROM track_files tf
+            LEFT JOIN artists p ON tf.performer_id = p.artist_id
+            LEFT JOIN instruments i ON tf.instrument_id = i.instrument_id
+            WHERE tf.session_id = $1
+            ORDER BY tf.created_at ASC
+        `;
+        
+        const tracksResult = await db.query(tracksQuery, [session_id]);
+        
         res.json({
-            success: true,
             session: sessionResult.rows[0],
             tracks: tracksResult.rows
         });
+        
     } catch (error) {
         console.error('Error fetching recording session:', error);
         res.status(500).json({ error: error.message });
     }
 });
 
-// Add a track to a recording session
-router.post('/tracks', async (req, res) => {
-    try {
-        const {
-            sessionId,
-            trackNumber,
-            trackName,
-            performerId,
-            instrument,
-            trackType,
-            s3Key,
-            s3Bucket,
-            fileSizeMb,
-            durationSeconds,
-            sampleRate,
-            bitDepth,
-            fileFormat,
-            recordingQuality,
-            technicalNotes
-        } = req.body;
-
-        const query = `
-            INSERT INTO tracks 
-            (session_id, track_number, track_name, performer_id, instrument, track_type,
-             s3_key, s3_bucket, file_size_mb, duration_seconds, sample_rate, bit_depth,
-             file_format, recording_quality, technical_notes)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
-            RETURNING *
-        `;
-
-        const result = await db.query(query, [
-            sessionId, trackNumber, trackName, performerId, instrument, trackType,
-            s3Key, s3Bucket, fileSizeMb, durationSeconds, sampleRate, bitDepth,
-            fileFormat, recordingQuality, technicalNotes
-        ]);
-
-        // Create initial approval record
-        const approvalQuery = `
-            INSERT INTO approvals (item_type, item_id, status)
-            VALUES ('track', $1, 'pending')
-        `;
-        await db.query(approvalQuery, [result.rows[0].id]);
-
-        // Notify via socket if available
-        const io = req.app.get('io');
-        if (io) {
-            // Get shabad ID for the session
-            const sessionQuery = `SELECT shabad_id FROM recording_sessions WHERE id = $1`;
-            const sessionResult = await db.query(sessionQuery, [sessionId]);
-            
-            if (sessionResult.rows.length > 0) {
-                io.to(`shabad_${sessionResult.rows[0].shabad_id}`).emit('new_track_uploaded', {
-                    trackId: result.rows[0].id,
-                    sessionId,
-                    trackName,
-                    performer: performerId
-                });
-            }
-        }
-
-        res.status(201).json({
-            success: true,
-            track: result.rows[0]
-        });
-    } catch (error) {
-        console.error('Error adding track:', error);
-        res.status(500).json({ error: error.message });
-    }
-});
-
-// Update track metadata
-router.put('/tracks/:trackId', async (req, res) => {
-    try {
-        const { trackId } = req.params;
-        const {
-            trackName,
-            instrument,
-            trackType,
-            recordingQuality,
-            technicalNotes
-        } = req.body;
-
-        const query = `
-            UPDATE tracks 
-            SET track_name = $1, instrument = $2, track_type = $3, 
-                recording_quality = $4, technical_notes = $5, updated_at = CURRENT_TIMESTAMP
-            WHERE id = $6
-            RETURNING *
-        `;
-
-        const result = await db.query(query, [
-            trackName, instrument, trackType, recordingQuality, technicalNotes, trackId
-        ]);
-
-        if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'Track not found' });
-        }
-
-        res.json({
-            success: true,
-            track: result.rows[0]
-        });
-    } catch (error) {
-        console.error('Error updating track:', error);
-        res.status(500).json({ error: error.message });
-    }
-});
-
-// Delete a track
-router.delete('/tracks/:trackId', async (req, res) => {
-    try {
-        const { trackId } = req.params;
-
-        // Get track details first to delete from S3
-        const trackQuery = `SELECT s3_key, s3_bucket FROM tracks WHERE id = $1`;
-        const trackResult = await db.query(trackQuery, [trackId]);
-
-        if (trackResult.rows.length === 0) {
-            return res.status(404).json({ error: 'Track not found' });
-        }
-
-        const track = trackResult.rows[0];
-
-        // Delete from S3
-        if (track.s3_key) {
-            await s3Config.deleteFromS3(track.s3_key);
-        }
-
-        // Delete approvals first (foreign key constraint)
-        await db.query(`DELETE FROM approvals WHERE item_type = 'track' AND item_id = $1`, [trackId]);
-
-        // Delete track from database
-        await db.query(`DELETE FROM tracks WHERE id = $1`, [trackId]);
-
-        res.json({
-            success: true,
-            message: 'Track deleted successfully'
-        });
-    } catch (error) {
-        console.error('Error deleting track:', error);
-        res.status(500).json({ error: error.message });
-    }
-});
-
 // Update recording session
-router.put('/sessions/:sessionId', async (req, res) => {
+router.put('/sessions/:session_id', async (req, res) => {
     try {
-        const { sessionId } = req.params;
+        const { session_id } = req.params;
         const {
-            sessionName,
-            studioLocation,
-            sessionDate,
-            sessionStartTime,
-            sessionEndTime,
-            notes,
-            status
+            end_time,
+            equipment_used,
+            file_format_quality,
+            duration,
+            approval_status,
+            notes
         } = req.body;
-
+        
         const query = `
-            UPDATE recording_sessions 
-            SET session_name = $1, studio_location = $2, session_date = $3,
-                session_start_time = $4, session_end_time = $5, notes = $6,
-                status = $7, updated_at = CURRENT_TIMESTAMP
-            WHERE id = $8
+            UPDATE recording_sessions
+            SET end_time = $1, equipment_used = $2, file_format_quality = $3,
+                duration = $4, approval_status = $5, notes = $6,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE session_id = $7
             RETURNING *
         `;
-
+        
         const result = await db.query(query, [
-            sessionName, studioLocation, sessionDate, sessionStartTime,
-            sessionEndTime, notes, status, sessionId
+            end_time, equipment_used, file_format_quality,
+            duration, approval_status, notes, session_id
         ]);
-
+        
         if (result.rows.length === 0) {
             return res.status(404).json({ error: 'Recording session not found' });
         }
-
+        
         res.json({
             success: true,
             session: result.rows[0]
         });
+        
     } catch (error) {
         console.error('Error updating recording session:', error);
         res.status(500).json({ error: error.message });
     }
 });
 
-// Get all tracks pending approval
-router.get('/tracks/pending-approval', async (req, res) => {
+// Add track file to recording session
+router.post('/sessions/:session_id/tracks', async (req, res) => {
     try {
+        const { session_id } = req.params;
+        const {
+            track_id,
+            performer_id,
+            instrument_id,
+            mic_label,
+            file_path,
+            track_duration,
+            channel_type,
+            file_size,
+            take_number = 1,
+            notes,
+            punch_in_points
+        } = req.body;
+        
         const query = `
-            SELECT t.*, 
-                   rs.session_name,
-                   s.first_line as shabad_first_line,
-                   s.ang_number,
-                   r.name as raag_name,
-                   u.full_name as performer_name,
-                   a.status as approval_status,
-                   a.created_at as submitted_for_approval
-            FROM tracks t
-            JOIN recording_sessions rs ON t.session_id = rs.id
-            JOIN shabads s ON rs.shabad_id = s.id
-            JOIN raags r ON s.raag_id = r.id
-            JOIN users u ON t.performer_id = u.id
-            JOIN approvals a ON a.item_type = 'track' AND a.item_id = t.id
-            WHERE a.status = 'pending'
-            ORDER BY a.created_at ASC
+            INSERT INTO track_files (
+                track_id, session_id, performer_id, instrument_id, mic_label,
+                file_path, track_duration, channel_type, file_size, take_number,
+                notes, punch_in_points, approval_status
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'pending')
+            RETURNING *
         `;
+        
+        const result = await db.query(query, [
+            track_id, session_id, performer_id, instrument_id, mic_label,
+            file_path, track_duration, channel_type, file_size, take_number,
+            notes, punch_in_points
+        ]);
+        
+        res.status(201).json({
+            success: true,
+            track: result.rows[0]
+        });
+        
+    } catch (error) {
+        console.error('Error adding track file:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
 
-        const result = await db.query(query);
+// Get all track files with filtering
+router.get('/tracks', async (req, res) => {
+    try {
+        const { 
+            page = 1, 
+            limit = 20, 
+            session_id, 
+            performer_id, 
+            instrument_id,
+            approval_status,
+            shabad_id 
+        } = req.query;
+        
+        const offset = (page - 1) * limit;
+        let whereClause = 'WHERE 1=1';
+        let params = [];
+        let paramCount = 0;
+        
+        if (session_id) {
+            paramCount++;
+            whereClause += ` AND tf.session_id = $${paramCount}`;
+            params.push(session_id);
+        }
+        
+        if (performer_id) {
+            paramCount++;
+            whereClause += ` AND tf.performer_id = $${paramCount}`;
+            params.push(performer_id);
+        }
+        
+        if (instrument_id) {
+            paramCount++;
+            whereClause += ` AND tf.instrument_id = $${paramCount}`;
+            params.push(instrument_id);
+        }
+        
+        if (approval_status) {
+            paramCount++;
+            whereClause += ` AND tf.approval_status = $${paramCount}`;
+            params.push(approval_status);
+        }
+        
+        if (shabad_id) {
+            paramCount++;
+            whereClause += ` AND rs.shabad_id = $${paramCount}`;
+            params.push(shabad_id);
+        }
+        
+        const query = `
+            SELECT 
+                tf.*,
+                rs.shabad_id,
+                s.title as shabad_title,
+                p.name as performer_name,
+                p.specialization as performer_specialization,
+                i.name as instrument_name,
+                i.category as instrument_category
+            FROM track_files tf
+            LEFT JOIN recording_sessions rs ON tf.session_id = rs.session_id
+            LEFT JOIN shabads s ON rs.shabad_id = s.shabad_id
+            LEFT JOIN artists p ON tf.performer_id = p.artist_id
+            LEFT JOIN instruments i ON tf.instrument_id = i.instrument_id
+            ${whereClause}
+            ORDER BY tf.created_at DESC
+            LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}
+        `;
+        
+        params.push(parseInt(limit), parseInt(offset));
+        
+        const result = await db.query(query, params);
+        
+        // Get total count
+        const countQuery = `
+            SELECT COUNT(*) as total
+            FROM track_files tf
+            LEFT JOIN recording_sessions rs ON tf.session_id = rs.session_id
+            ${whereClause}
+        `;
+        
+        const countResult = await db.query(countQuery, params.slice(0, paramCount));
+        const total = parseInt(countResult.rows[0].total);
+        
+        res.json({
+            tracks: result.rows,
+            pagination: {
+                page: parseInt(page),
+                limit: parseInt(limit),
+                total,
+                pages: Math.ceil(total / limit)
+            }
+        });
+        
+    } catch (error) {
+        console.error('Error fetching track files:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
 
+// Update track file
+router.put('/tracks/:track_id', async (req, res) => {
+    try {
+        const { track_id } = req.params;
+        const {
+            mic_label,
+            track_duration,
+            channel_type,
+            file_size,
+            take_number,
+            notes,
+            approval_status,
+            punch_in_points
+        } = req.body;
+        
+        const query = `
+            UPDATE track_files
+            SET mic_label = $1, track_duration = $2, channel_type = $3,
+                file_size = $4, take_number = $5, notes = $6,
+                approval_status = $7, punch_in_points = $8,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE track_id = $9
+            RETURNING *
+        `;
+        
+        const result = await db.query(query, [
+            mic_label, track_duration, channel_type, file_size,
+            take_number, notes, approval_status, punch_in_points, track_id
+        ]);
+        
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Track file not found' });
+        }
+        
         res.json({
             success: true,
-            pendingTracks: result.rows
+            track: result.rows[0]
         });
+        
     } catch (error) {
-        console.error('Error fetching pending tracks:', error);
+        console.error('Error updating track file:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Delete track file
+router.delete('/tracks/:track_id', async (req, res) => {
+    try {
+        const { track_id } = req.params;
+        
+        const result = await db.query('DELETE FROM track_files WHERE track_id = $1 RETURNING *', [track_id]);
+        
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Track file not found' });
+        }
+        
+        res.json({
+            success: true,
+            message: 'Track file deleted successfully'
+        });
+        
+    } catch (error) {
+        console.error('Error deleting track file:', error);
         res.status(500).json({ error: error.message });
     }
 });
 
 // Get recording statistics
-router.get('/statistics', async (req, res) => {
+router.get('/stats', async (req, res) => {
     try {
-        const queries = [
-            // Total sessions
-            `SELECT COUNT(*) as total_sessions FROM recording_sessions`,
-            
-            // Total tracks
-            `SELECT COUNT(*) as total_tracks FROM tracks`,
-            
-            // Tracks by status
-            `SELECT a.status, COUNT(*) as count 
-             FROM approvals a 
-             WHERE a.item_type = 'track' 
-             GROUP BY a.status`,
-            
-            // Sessions by status
-            `SELECT status, COUNT(*) as count 
-             FROM recording_sessions 
-             GROUP BY status`,
-             
-            // Recent activity (last 7 days)
-            `SELECT DATE(created_at) as date, COUNT(*) as tracks_recorded
-             FROM tracks 
-             WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'
-             GROUP BY DATE(created_at)
-             ORDER BY date`
-        ];
-
-        const results = await Promise.all(queries.map(query => db.query(query)));
-
+        const query = `
+            SELECT 
+                COUNT(DISTINCT rs.session_id) as total_sessions,
+                COUNT(DISTINCT CASE WHEN rs.approval_status = 'approved' THEN rs.session_id END) as approved_sessions,
+                COUNT(DISTINCT rs.shabad_id) as shabads_recorded,
+                COUNT(DISTINCT tf.track_id) as total_tracks,
+                COUNT(DISTINCT CASE WHEN tf.approval_status = 'approved' THEN tf.track_id END) as approved_tracks,
+                COUNT(DISTINCT rs.primary_artist_id) as unique_artists,
+                SUM(EXTRACT(EPOCH FROM rs.duration))/3600 as total_hours_recorded,
+                AVG(EXTRACT(EPOCH FROM rs.duration))/60 as avg_session_minutes
+            FROM recording_sessions rs
+            LEFT JOIN track_files tf ON rs.session_id = tf.session_id
+        `;
+        
+        const result = await db.query(query);
+        const stats = result.rows[0];
+        
+        // Get stats by instrument
+        const instrumentQuery = `
+            SELECT 
+                i.name as instrument,
+                i.category,
+                COUNT(tf.track_id) as track_count,
+                COUNT(CASE WHEN tf.approval_status = 'approved' THEN 1 END) as approved_count
+            FROM track_files tf
+            LEFT JOIN instruments i ON tf.instrument_id = i.instrument_id
+            GROUP BY i.instrument_id, i.name, i.category
+            ORDER BY track_count DESC
+        `;
+        
+        const instrumentResult = await db.query(instrumentQuery);
+        
+        // Get stats by location
+        const locationQuery = `
+            SELECT 
+                location,
+                COUNT(*) as session_count,
+                COUNT(CASE WHEN approval_status = 'approved' THEN 1 END) as approved_count
+            FROM recording_sessions
+            WHERE location IS NOT NULL
+            GROUP BY location
+            ORDER BY session_count DESC
+        `;
+        
+        const locationResult = await db.query(locationQuery);
+        
         res.json({
-            success: true,
-            statistics: {
-                totalSessions: parseInt(results[0].rows[0].total_sessions),
-                totalTracks: parseInt(results[1].rows[0].total_tracks),
-                tracksByStatus: results[2].rows,
-                sessionsByStatus: results[3].rows,
-                recentActivity: results[4].rows
-            }
+            overall: {
+                ...stats,
+                total_hours_recorded: parseFloat(stats.total_hours_recorded || 0).toFixed(2),
+                avg_session_minutes: parseFloat(stats.avg_session_minutes || 0).toFixed(1)
+            },
+            by_instrument: instrumentResult.rows,
+            by_location: locationResult.rows
         });
+        
     } catch (error) {
-        console.error('Error fetching statistics:', error);
+        console.error('Error fetching recording statistics:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get pending approvals for tracks
+router.get('/pending-approvals', async (req, res) => {
+    try {
+        const { type = 'tracks' } = req.query;
+        
+        let query;
+        
+        if (type === 'tracks') {
+            query = `
+                SELECT 
+                    tf.*,
+                    rs.shabad_id,
+                    s.title as shabad_title,
+                    p.name as performer_name,
+                    i.name as instrument_name,
+                    rs.start_time as session_start
+                FROM track_files tf
+                LEFT JOIN recording_sessions rs ON tf.session_id = rs.session_id
+                LEFT JOIN shabads s ON rs.shabad_id = s.shabad_id
+                LEFT JOIN artists p ON tf.performer_id = p.artist_id
+                LEFT JOIN instruments i ON tf.instrument_id = i.instrument_id
+                WHERE tf.approval_status = 'pending'
+                ORDER BY tf.created_at ASC
+            `;
+        } else if (type === 'sessions') {
+            query = `
+                SELECT 
+                    rs.*,
+                    s.title as shabad_title,
+                    pa.name as primary_artist_name
+                FROM recording_sessions rs
+                LEFT JOIN shabads s ON rs.shabad_id = s.shabad_id
+                LEFT JOIN artists pa ON rs.primary_artist_id = pa.artist_id
+                WHERE rs.approval_status = 'pending'
+                ORDER BY rs.start_time ASC
+            `;
+        }
+        
+        const result = await db.query(query);
+        
+        res.json({
+            pending_items: result.rows,
+            count: result.rows.length
+        });
+        
+    } catch (error) {
+        console.error('Error fetching pending approvals:', error);
         res.status(500).json({ error: error.message });
     }
 });
