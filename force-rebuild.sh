@@ -19,4 +19,3 @@ echo "🩺 Testing endpoints..."
 curl -s http://localhost:5200/api/health | jq
 echo ""
 curl -s http://localhost:5200/api/shabads | head -100
-
